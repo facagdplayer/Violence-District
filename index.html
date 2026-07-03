@@ -142,7 +142,7 @@
                 }
                 
                 // Menaikkan kecepatan secara halus hanya jika skor di bawah 10
-                if (score < 23) {
+                if (score < 25) {
                     needleSpeed = Math.min(4, needleSpeed + 0.1);
                 }
                 
@@ -236,7 +236,7 @@
             ctx.fillText(`HIGH SCORE: ${highScore}`, 20, 80);
 
             // Indikator jika kecepatan sudah maksimal (Skor >= 10)
-            if (score >= 10) {
+            if (score >= 25) {
                 ctx.fillStyle = "#32ff32";
                 ctx.font = "18px Arial";
                 ctx.fillText("[ SPEED LOCKED ]", 20, 110);
