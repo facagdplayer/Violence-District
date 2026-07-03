@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latihan Jarum Berputar - Violence District Style</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+        #gameCanvas {
+            border: 2px solid #333;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(255,255,255,0.1);
+        }
+        .instructions {
+            margin-top: 15px;
+            color: #aaa;
+            font-size: 16px;
+            text-align: center;
+        }
+        kbd {
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 14px;
+            color: #fff;
+        }
+        .credit {
+            margin-top: 10px;
+            color: #555; 
+            font-size: 13px;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <div class="instructions">
+        Tekan tombol <kbd>SPACEBAR</kbd> atau <strong>Klik/Sentuh Layar</strong> untuk memukul!
+    </div>
+    <div class="credit">Created by FacaSLBR</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Audio Context untuk suara sintetis
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(freq, duration) {
+            initAudio();
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        // Variabel Game
+        const CENTER_X = canvas.width / 2;
+        const CENTER_Y = canvas.height / 2;
+        const RADIUS = 150;
+
+        let needleAngle = 0; 
+        let needleSpeed = 1.5;  // Kecepatan awal yang disesuaikan (lambat & nyaman)
+
+        const zoneWidth = 35; 
+        let zoneStart = Math.floor(Math.random() * 360);
+
+        // Status Game
+        let score = 0;
+        let streak = 0;
+        
+        // --- AMBIL HIGH SCORE DARI PENYIMPANAN BROWSER ---
+        let highScore = localStorage.getItem("faca_high_score") ? parseInt(localStorage.getItem("faca_high_score")) : 0;
+
+        let feedbackText = "TEKAN SPACE SAAT JARUM DI ZONA HIJAU!";
+        let feedbackColor = "#ffffff";
+        let feedbackTimer = 0;
+
+        function getOppositeTarget(currentStart) {
+            let opposite = (currentStart + 180) % 360;
+            let randomShift = Math.floor(Math.random() * 61) - 30; 
+            return (opposite + randomShift + 360) % 360;
+        }
+
+        function handleInput() {
+            initAudio(); 
+
+            let currentAngle = needleAngle % 360;
+            let zoneEnd = (zoneStart + zoneWidth) % 360;
+
+            let isHit = false;
+            if (zoneStart < zoneEnd) {
+                if (currentAngle >= zoneStart && currentAngle <= zoneEnd) isHit = true;
+            } else { 
+                if (currentAngle >= zoneStart || currentAngle <= zoneEnd) isHit = true;
+            }
+
+            // Logika Berhasil (HIT)
+            if (isHit) {
+                score += 1;
+                streak += 1;
+                feedbackText = `PERFECT! Streak: ${streak}`;
+                feedbackColor = "#32ff32"; 
+                
+                // --- UPDATE HIGH SCORE SECARA REAL-TIME ---
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem("faca_high_score", highScore); // Simpan permanen di browser
+                }
+                
+                // Menaikkan kecepatan secara halus hanya jika skor di bawah 10
+                if (score < 10) {
+                    needleSpeed = Math.min(4, needleSpeed + 0.1);
+                }
+                
+                playSound(880, 0.1); 
+                zoneStart = getOppositeTarget(zoneStart);
+            } 
+            // Logika Gagal (MISS) - RESET TOTAL
+            else {
+                score = 0;
+                streak = 0;
+                needleSpeed = 1.5;   // Kembali lambat
+                needleAngle = 0;     // Posisi jarum balik ke 0
+                
+                feedbackText = "MISS! DIMULAI DARI AWAL!";
+                feedbackColor = "#ff3232"; 
+                
+                playSound(220, 0.25); 
+                zoneStart = Math.floor(Math.random() * 360);
+            }
+            
+            feedbackTimer = 40; 
+        }
+
+        // Event Listeners
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
+                e.preventDefault(); 
+                handleInput();
+            }
+        });
+
+        canvas.addEventListener("mousedown", () => {
+            handleInput();
+        });
+
+        canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            handleInput();
+        });
+
+        // Game Loop Utama
+        function gameLoop() {
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gambar Lingkaran Dial
+            ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, RADIUS, 0, 2 * Math.PI);
+            ctx.strokeStyle = "#323232";
+            ctx.lineWidth = 10;
+            ctx.stroke();
+
+            // Gambar Zona Target (Busur Hijau)
+            let startRad = (zoneStart * Math.PI) / 180;
+            let endRad = ((zoneStart + zoneWidth) * Math.PI) / 180;
+            ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, RADIUS, startRad, endRad);
+            ctx.strokeStyle = "#32ff32";
+            ctx.lineWidth = 12;
+            ctx.stroke();
+
+            // Update Posisi Jarum & Gambar Jarum
+            needleAngle = (needleAngle + needleSpeed) % 360;
+            let needleRad = (needleAngle * Math.PI) / 180;
+            let endX = CENTER_X + RADIUS * Math.cos(needleRad);
+            let endY = CENTER_Y + RADIUS * Math.sin(needleRad);
+
+            ctx.beginPath();
+            ctx.moveTo(CENTER_X, CENTER_Y);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = "#ff3232";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            // Titik Poros Tengah
+            ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = "#c8c8c8";
+            ctx.fill();
+
+            // --- UI Text ---
+            // Teks Skor Sekarang
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 32px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText(`SCORE: ${score}`, 20, 45);
+
+            // --- TAMPILKAN HIGH SCORE ---
+            ctx.fillStyle = "#ffcc00"; // Berwarna emas/kuning agar mencolok
+            ctx.font = "bold 20px Arial";
+            ctx.fillText(`HIGH SCORE: ${highScore}`, 20, 80);
+
+            // Indikator jika kecepatan sudah maksimal (Skor >= 10)
+            if (score >= 10) {
+                ctx.fillStyle = "#32ff32";
+                ctx.font = "18px Arial";
+                ctx.fillText("[ SPEED LOCKED ]", 20, 110);
+            }
+
+            // Teks Panduan / Feedback di bawah layar
+            if (feedbackTimer > 0) {
+                feedbackTimer--;
+            } else {
+                if (streak > 0) {
+                    feedbackText = `Streak: ${streak} | Pertahankan!`;
+                } else {
+                    feedbackText = "Tekan SPACE tepat di target!";
+                }
+                feedbackColor = "#c8c8c8";
+            }
+
+            ctx.fillStyle = feedbackColor;
+            ctx.font = "22px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(feedbackText, canvas.width / 2, canvas.height - 40);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
